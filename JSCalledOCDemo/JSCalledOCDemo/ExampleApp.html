@@ -1,0 +1,85 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+    <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0">
+	<style type='text/css'>
+		html { font-family:Helvetica; color:#222; }
+		h1 { color:steelblue; font-size:24px; margin-top:24px; }
+		button { margin:0 3px 10px; font-size:12px; }
+		.logLine { border-bottom:1px solid #ccc; padding:4px 2px; font-family:courier; font-size:11px; }
+	</style>
+    </head>
+    <body>
+	<h1>WebViewJavascriptBridge Demo</h1>
+    
+	<script>
+	window.onerror = function(err) {
+		log('window.onerror: ' + err)
+	}
+	<!-- 这段代码是固定的，必须要放到js中 -->
+    function setupWebViewJavascriptBridge(callback) {
+        if (window.WebViewJavascriptBridge) {
+        		return callback(WebViewJavascriptBridge); 
+        }
+        if (window.WVJBCallbacks) {
+        		return window.WVJBCallbacks.push(callback); 
+        }
+        window.WVJBCallbacks = [callback];
+        var WVJBIframe = document.createElement('iframe');
+        WVJBIframe.style.display = 'none';
+        WVJBIframe.src = 'https://__bridge_loaded__';
+        document.documentElement.appendChild(WVJBIframe);
+        setTimeout(function() {
+        		document.documentElement.removeChild(WVJBIframe) 
+        }, 0)
+    }
+	<!--与OC交互的所有JS方法都要放在此处注册，才能调用通过JS调用OC或者让OC调用这里的JS-->
+    setupWebViewJavascriptBridge(function(bridge) {
+		var uniqueId = 1
+		
+		<!-- 页面打印数据方法-->
+		function log(message, data) {
+			var log = document.getElementById('log')
+			var el = document.createElement('div')
+			el.className = 'logLine'
+			el.innerHTML = uniqueId++ + '. ' + message + ':<br/>' + JSON.stringify(data)
+			if (log.children.length) { log.insertBefore(el, log.children[0]) }
+			else { log.appendChild(el) }
+		}
+	 <!--我们在这注册一个OC调用JS的方法，不带参数，且不用OC端反馈结果给JS：打开本demo对应的博文-->
+       
+         bridge.registerHandler('OCCalledJSNoParamNoResponse', function() {
+            log("OC调用JS的 OCCalledJSNoParamNoResponse 方法 成功，并且不带参数没有回调")
+         })
+		
+		<!-- 注册OC调用JS的方法名和方法实现,接收OC传过来的参数，且可以回调OC-->
+		bridge.registerHandler('OCCalledJS', function(data, responseCallback) {
+			log('OC 调用JS的 OCCalledJS 方法 成功，并传参：', data)
+			var responseData = { 'JSResponse Says':'OC调用JS的OCCalledJS方法成功，JS回调数据' }
+			log('JS向OC回调数据：', responseData)
+			responseCallback(responseData)
+		})
+		
+		<!-- 页面打印数据 添加换行-->
+		document.body.appendChild(document.createElement('br'))
+
+		<!-- 页面按钮控制-->
+		var callbackButton = document.getElementById('buttons').appendChild(document.createElement('button'))
+		callbackButton.innerHTML = 'Fire JSCalledOC'
+		callbackButton.onclick = function(e) {
+			e.preventDefault()
+			<!-- JS调用OC方法,传参数-->
+			bridge.callHandler('JSCalledOC', {'jsParam': '我是JS的参数'}, function(response) {
+				<!-- OC回调JS时,打印返回的数据 -->
+				log('JS调用OC的 JSCalledOC 方法，并得到回调数据：', response)
+			})
+		}
+		
+		<!--JS调用OC方法,如果OC已经注册,则OC会执行对应代码,并可以向回调数据。这样写就是在载入页面完成时就先自动调用-->
+		biidge.callHandle('AutoJSCalledOC', function(responseData) {
+         log("JS 调用OC的 AutoJSCalledOC 方法, 并且JS受到OC的回调数据:", responseData)
+       })
+	})
+	</script>
+	<div id='buttons'></div> <div id='log'></div>
+</body></html>
